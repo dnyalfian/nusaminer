@@ -36,10 +36,10 @@ label_encoder_target = LabelEncoder()
 # Database Connection
 def get_db_connection():
     return psycopg2.connect(
-        host="postgres.railway.internal",
+        host="db.mwjaxtmrqscfeiflzydv.supabase.co",
         user="postgres",
-        password="oIrnsFZPLjzhnUMoNODtmvZQmhQnFFfN",
-        database="railway",
+        password="P@ssw0rd", 
+        database="postgres",
         port=5432
     )
 
