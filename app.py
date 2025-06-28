@@ -30,6 +30,7 @@ import base64
 app = Flask(__name__)
 CORS(app)
 
+
 # test
 @app.route('/', methods=['GET'])
 def index():
