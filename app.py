@@ -25,6 +25,7 @@ import seaborn as sns
 from sklearn.pipeline import make_pipeline
 import io
 import base64
+import psycopg2
 
 
 app = Flask(__name__)
@@ -34,12 +35,12 @@ label_encoder_target = LabelEncoder()
 
 # Database Connection
 def get_db_connection():
-    return pymysql.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="db_skripsi",
-        cursorclass=pymysql.cursors.DictCursor
+    return psycopg2.connect(
+        host="postgres.railway.internal",
+        user="postgres",
+        password="oIrnsFZPLjzhnUMoNODtmvZQmhQnFFfN",
+        database="railway",
+        port=5432
     )
 
 # Endpoint: Register
