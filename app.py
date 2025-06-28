@@ -785,6 +785,11 @@ def predict_disease():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
+# test
+@app.route('/', methods=['GET'])
+def index():
+    return '✅ NusaMiner Flask backend is live!'
+
 
 # Endpoint Clustering
 @app.route('/clustering', methods=['GET'])
@@ -874,9 +879,6 @@ def clustering_endpoint():
 
 
 # Main
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-
 if __name__ == '__main__':
     import os
     port = int(os.environ.get("PORT", 5000))
