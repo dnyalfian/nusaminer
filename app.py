@@ -30,6 +30,11 @@ import base64
 app = Flask(__name__)
 CORS(app)
 
+# test
+@app.route('/', methods=['GET'])
+def index():
+    return '✅ NusaMiner Flask backend is live!'
+
 label_encoder_target = LabelEncoder()
 
 # Database Connection
@@ -785,10 +790,6 @@ def predict_disease():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-# test
-@app.route('/', methods=['GET'])
-def index():
-    return '✅ NusaMiner Flask backend is live!'
 
 
 # Endpoint Clustering
