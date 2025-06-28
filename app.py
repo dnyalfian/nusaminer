@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 from flask import send_from_directory
 from flask_cors import CORS
 import os
-import pymysql
 import pandas as pd
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
