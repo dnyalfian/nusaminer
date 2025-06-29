@@ -37,13 +37,13 @@ label_encoder_target = LabelEncoder()
 # Database Connection
 def get_db_connection():
     return psycopg2.connect(
-        host="db.pclcdbmhklibarghcjdk.supabase.co",
-        user="postgres",
-        password="P@ssw0rd",
-        database="postgres",
+        dbname="neondb",
+        user="neondb_owner",
+        password="npg_6TQK4pgCWVuO",
+        host="ep-snowy-cell-a1izwmos-pooler.ap-southeast-1.aws.neon.tech",
         port=5432,
         sslmode="require",
-        cursor_factory=RealDictCursor  # ✅ penting!
+        cursor_factory=RealDictCursor
     )
 
 @app.route("/test_db")
