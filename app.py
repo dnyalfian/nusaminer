@@ -3,6 +3,7 @@ from flask import send_from_directory
 from flask_cors import CORS
 import os
 import pandas as pd
+import numpy as np
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder, StandardScaler, label_binarize
@@ -16,7 +17,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, accuracy_score, classification_report, roc_curve, auc
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report,  roc_curve as sk_roc_curve, auc
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -644,6 +645,7 @@ def display_confusion_matrix():
 # Endpoint: ROC Curve
 @app.route('/roc_curve', methods=['GET'])
 def roc_curve_plot():
+
     try:
         user_id = request.args.get('user_id')
         models_param = request.args.get('models', '')
@@ -677,31 +679,54 @@ def roc_curve_plot():
         if X.select_dtypes(include=['object']).shape[1] > 0:
             return jsonify({"status": "error", "message": "Dataset contains categorical data. Please convert it first."}), 400
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, stratify=y, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, stratify=y, random_state=42)
 
-        y_test_bin = label_binarize(y_test, classes=y.unique())
+        classes = np.unique(y)
+        y_test_bin = label_binarize(y_test, classes=classes)
         n_classes = y_test_bin.shape[1]
 
         model_names = [m.strip() for m in models_param.split(',')]
 
         plt.figure(figsize=(8, 6))
+        auc_scores_dict = {}
+        plotted = False
+
         for name in model_names:
             model = build_model(name, request)
             if model is None:
                 print(f"Model not recognized: {name}")
                 continue
-            model.fit(X_train, y_train)
-            if not hasattr(model, 'predict_proba'):
-                continue
-            y_score = model.predict_proba(X_test)
 
-            fpr, tpr, roc_auc = {}, {}, {}
-            for i in range(n_classes):
-                fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
-                roc_auc[i] = auc(fpr[i], tpr[i])
-            mean_auc = sum(roc_auc.values()) / n_classes
-            plt.plot(fpr[0], tpr[0], label=f"{name} (AUC = {mean_auc:.2f})")
+            try:
+                model.fit(X_train, y_train)
+                if not hasattr(model, 'predict_proba'):
+                    print(f"Model '{name}' does not support predict_proba, skipping.")
+                    continue
+
+                y_score = model.predict_proba(X_test)
+
+                if n_classes == 1:
+                    fpr, tpr, _ = sk_roc_curve(y_test_bin, y_score[:, 1] if y_score.shape[1] > 1 else y_score[:, 0])
+                    auc_val = auc(fpr, tpr)
+                    auc_scores_dict[name] = round(auc_val, 4)
+                    plt.plot(fpr, tpr, label=f"{name} (AUC = {auc_val:.2f})")
+                else:
+                    fpr, tpr, roc_auc = {}, {}, {}
+                    for i in range(n_classes):
+                        fpr[i], tpr[i], _ = sk_roc_curve(y_test_bin[:, i], y_score[:, i])
+                        roc_auc[i] = auc(fpr[i], tpr[i])
+                    mean_auc = sum(roc_auc.values()) / n_classes
+                    auc_scores_dict[name] = round(mean_auc, 4)
+                    plt.plot(fpr[0], tpr[0], label=f"{name} (AUC = {mean_auc:.2f})")
+
+                plotted = True
+
+            except Exception as e:
+                print(f"Error with model {name}: {e}")
+                continue
+
+        if not plotted:
+            return jsonify({"status": "error", "message": "No valid models produced ROC curves."}), 400
 
         plt.plot([0, 1], [0, 1], 'k--')
         plt.title("ROC Curve Comparison")
@@ -715,17 +740,18 @@ def roc_curve_plot():
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode('utf-8')
         buf.close()
+
         plt.close()
 
         return jsonify({
             "status": "success",
             "roc_curve_combined": img_base64,
-            "message": f"ROC curve for models: {', '.join(model_names)}"
+            "auc_scores": auc_scores_dict,
+            "message": f"ROC curve for models: {', '.join(auc_scores_dict.keys())}"
         }), 200
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 # Endpoint Prediction
 @app.route('/predict', methods=['POST'])
