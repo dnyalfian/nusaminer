@@ -677,50 +677,31 @@ def roc_curve_plot():
         if X.select_dtypes(include=['object']).shape[1] > 0:
             return jsonify({"status": "error", "message": "Dataset contains categorical data. Please convert it first."}), 400
 
-        class_counts = y.value_counts().to_dict()
-        print(f"Class distribution: {class_counts}")
-
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, stratify=y, random_state=42)
 
-        classes = sorted(y.unique())
-        y_test_bin = label_binarize(y_test, classes=classes)
+        y_test_bin = label_binarize(y_test, classes=y.unique())
         n_classes = y_test_bin.shape[1]
 
         model_names = [m.strip() for m in models_param.split(',')]
 
         plt.figure(figsize=(8, 6))
-        plotted = False
-
         for name in model_names:
             model = build_model(name, request)
             if model is None:
                 print(f"Model not recognized: {name}")
                 continue
-
-            try:
-                model.fit(X_train, y_train)
-                if not hasattr(model, 'predict_proba'):
-                    print(f"Model '{name}' does not support predict_proba, skipping.")
-                    continue
-
-                y_score = model.predict_proba(X_test)
-
-                fpr, tpr, roc_auc = {}, {}, {}
-                for i in range(n_classes):
-                    fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
-                    roc_auc[i] = auc(fpr[i], tpr[i])
-                mean_auc = sum(roc_auc.values()) / n_classes
-
-                plt.plot(fpr[0], tpr[0], label=f"{name} (AUC = {mean_auc:.2f})")
-                plotted = True
-
-            except Exception as e:
-                print(f"Error with model {name}: {e}")
+            model.fit(X_train, y_train)
+            if not hasattr(model, 'predict_proba'):
                 continue
+            y_score = model.predict_proba(X_test)
 
-        if not plotted:
-            return jsonify({"status": "error", "message": "No valid models produced ROC curves."}), 400
+            fpr, tpr, roc_auc = {}, {}, {}
+            for i in range(n_classes):
+                fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_score[:, i])
+                roc_auc[i] = auc(fpr[i], tpr[i])
+            mean_auc = sum(roc_auc.values()) / n_classes
+            plt.plot(fpr[0], tpr[0], label=f"{name} (AUC = {mean_auc:.2f})")
 
         plt.plot([0, 1], [0, 1], 'k--')
         plt.title("ROC Curve Comparison")
