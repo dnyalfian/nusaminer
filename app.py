@@ -41,7 +41,8 @@ def get_db_connection():
         user="neondb_owner",
         password="npg_6TQK4pgCWVuO",
         port=5432,
-        sslmode="require"
+        sslmode="require",
+        cursor_factory=RealDictCursor
     )
 
 @app.route("/test_db")
