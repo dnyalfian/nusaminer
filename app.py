@@ -32,6 +32,7 @@ CORS(app)
 
 label_encoder_target = LabelEncoder()
 
+
 # Database Connection
 def get_db_connection():
     return psycopg2.connect(
