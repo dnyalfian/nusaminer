@@ -46,15 +46,6 @@ def get_db_connection():
         cursor_factory=RealDictCursor
     )
 
-@app.route("/test_db")
-def test_db():
-    try:
-        conn = get_db_connection()
-        conn.close()
-        return jsonify({"status": "success", "message": "PostgreSQL connected ✅"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
 # Endpoint: Register
 @app.route('/register', methods=['POST'])
 def register():
