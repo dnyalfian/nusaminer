@@ -645,7 +645,6 @@ def display_confusion_matrix():
 # Endpoint: ROC Curve
 @app.route('/roc_curve', methods=['GET'])
 def roc_curve_plot():
-
     try:
         user_id = request.args.get('user_id')
         models_param = request.args.get('models', '')
@@ -667,9 +666,7 @@ def roc_curve_plot():
         if df.empty or df.isnull().values.any():
             return jsonify({"status": "error", "message": "Dataset empty or contains missing values."}), 400
 
-        file_path = file_record['file_path']
-        target_column = get_target_column_from_meta(file_path)
-
+        target_column = get_target_column_from_meta(file_record['file_path'])
         if target_column not in df.columns:
             return jsonify({"status": "error", "message": f"Target column '{target_column}' not found."}), 400
 
@@ -680,74 +677,110 @@ def roc_curve_plot():
             return jsonify({"status": "error", "message": "Dataset contains categorical data. Please convert it first."}), 400
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, stratify=y, random_state=42)
-
         classes = np.unique(y)
-        y_test_bin = label_binarize(y_test, classes=classes)
-        n_classes = y_test_bin.shape[1]
-
         model_names = [m.strip() for m in models_param.split(',')]
+        auc_scores_train, auc_scores_test = {}, {}
 
+        # ROC Testing
         plt.figure(figsize=(8, 6))
-        auc_scores_dict = {}
-        plotted = False
-
         for name in model_names:
             model = build_model(name, request)
             if model is None:
-                print(f"Model not recognized: {name}")
+                continue
+            model.fit(X_train, y_train)
+
+            if not hasattr(model, 'predict_proba'):
                 continue
 
-            try:
-                model.fit(X_train, y_train)
-                if not hasattr(model, 'predict_proba'):
-                    print(f"Model '{name}' does not support predict_proba, skipping.")
-                    continue
+            y_score_test = model.predict_proba(X_test)
+            y_score_train = model.predict_proba(X_train)
 
-                y_score = model.predict_proba(X_test)
+            y_test_bin = label_binarize(y_test, classes=classes)
+            y_train_bin = label_binarize(y_train, classes=classes)
+            n_classes = y_test_bin.shape[1]
 
-                if n_classes == 1:
-                    fpr, tpr, _ = sk_roc_curve(y_test_bin, y_score[:, 1] if y_score.shape[1] > 1 else y_score[:, 0])
-                    auc_val = auc(fpr, tpr)
-                    auc_scores_dict[name] = round(auc_val, 4)
-                    plt.plot(fpr, tpr, label=f"{name} (AUC = {auc_val:.2f})")
-                else:
-                    fpr, tpr, roc_auc = {}, {}, {}
-                    for i in range(n_classes):
-                        fpr[i], tpr[i], _ = sk_roc_curve(y_test_bin[:, i], y_score[:, i])
-                        roc_auc[i] = auc(fpr[i], tpr[i])
-                    mean_auc = sum(roc_auc.values()) / n_classes
-                    auc_scores_dict[name] = round(mean_auc, 4)
-                    plt.plot(fpr[0], tpr[0], label=f"{name} (AUC = {mean_auc:.2f})")
+            # === ROC AUC TESTING ===
+            if n_classes == 1:
+                fpr, tpr, _ = sk_roc_curve(y_test_bin, y_score_test[:, 1])
+                auc_val = auc(fpr, tpr)
+                auc_scores_test[name] = round(auc_val, 4)
+                plt.plot(fpr, tpr, label=f"{name} (AUC = {auc_val:.2f})")
+            else:
+                roc_auc = {}
+                for i in range(n_classes):
+                    fpr, tpr, _ = sk_roc_curve(y_test_bin[:, i], y_score_test[:, i])
+                    roc_auc[i] = auc(fpr, tpr)
+                mean_auc = sum(roc_auc.values()) / n_classes
+                auc_scores_test[name] = round(mean_auc, 4)
+                fpr0, tpr0, _ = sk_roc_curve(y_test_bin[:, 0], y_score_test[:, 0])
+                plt.plot(fpr0, tpr0, label=f"{name} (AUC = {mean_auc:.2f})")
 
-                plotted = True
-
-            except Exception as e:
-                print(f"Error with model {name}: {e}")
-                continue
-
-        if not plotted:
-            return jsonify({"status": "error", "message": "No valid models produced ROC curves."}), 400
+            # === ROC AUC TRAINING ===
+            if n_classes == 1:
+                fpr, tpr, _ = sk_roc_curve(y_train_bin, y_score_train[:, 1])
+                auc_val = auc(fpr, tpr)
+                auc_scores_train[name] = round(auc_val, 4)
+            else:
+                roc_auc = {}
+                for i in range(n_classes):
+                    fpr, tpr, _ = sk_roc_curve(y_train_bin[:, i], y_score_train[:, i])
+                    roc_auc[i] = auc(fpr, tpr)
+                mean_auc = sum(roc_auc.values()) / n_classes
+                auc_scores_train[name] = round(mean_auc, 4)
 
         plt.plot([0, 1], [0, 1], 'k--')
-        plt.title("ROC Curve Comparison")
+        plt.title("ROC Curve - Testing")
         plt.xlabel("False Positive Rate")
         plt.ylabel("True Positive Rate")
         plt.legend(loc='lower right')
         plt.tight_layout()
 
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-        buf.close()
+        buf_test = io.BytesIO()
+        plt.savefig(buf_test, format='png')
+        buf_test.seek(0)
+        test_img_base64 = base64.b64encode(buf_test.read()).decode('utf-8')
+        buf_test.close()
+        plt.close()
 
+        # ROC Curve for Training
+        plt.figure(figsize=(8, 6))
+        for name in model_names:
+            model = build_model(name, request)
+            model.fit(X_train, y_train)
+            if not hasattr(model, 'predict_proba'):
+                continue
+            y_score_train = model.predict_proba(X_train)
+            y_train_bin = label_binarize(y_train, classes=classes)
+            if n_classes == 1:
+                fpr, tpr, _ = sk_roc_curve(y_train_bin, y_score_train[:, 1])
+                auc_val = auc(fpr, tpr)
+                plt.plot(fpr, tpr, label=f"{name} (AUC = {auc_val:.2f})")
+            else:
+                fpr, tpr, _ = sk_roc_curve(y_train_bin[:, 0], y_score_train[:, 0])
+                mean_auc = auc_scores_train.get(name, 0)
+                plt.plot(fpr, tpr, label=f"{name} (AUC = {mean_auc:.2f})")
+
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.title("ROC Curve - Training")
+        plt.xlabel("False Positive Rate")
+        plt.ylabel("True Positive Rate")
+        plt.legend(loc='lower right')
+        plt.tight_layout()
+
+        buf_train = io.BytesIO()
+        plt.savefig(buf_train, format='png')
+        buf_train.seek(0)
+        train_img_base64 = base64.b64encode(buf_train.read()).decode('utf-8')
+        buf_train.close()
         plt.close()
 
         return jsonify({
             "status": "success",
-            "roc_curve_combined": img_base64,
-            "auc_scores": auc_scores_dict,
-            "message": f"ROC curve for models: {', '.join(auc_scores_dict.keys())}"
+            "roc_curve_train": train_img_base64,
+            "roc_curve_test": test_img_base64,
+            "auc_scores_train": auc_scores_train,
+            "auc_scores_test": auc_scores_test,
+            "message": f"ROC curves generated for models: {', '.join(model_names)}"
         }), 200
 
     except Exception as e:
