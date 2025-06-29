@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 from flask import send_from_directory
 from flask_cors import CORS
 import os
-import pymysql
 import pandas as pd
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -25,6 +24,7 @@ import seaborn as sns
 from sklearn.pipeline import make_pipeline
 import io
 import base64
+import psycopg2
 
 
 app = Flask(__name__)
@@ -34,13 +34,22 @@ label_encoder_target = LabelEncoder()
 
 # Database Connection
 def get_db_connection():
-    return pymysql.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="db_skripsi",
-        cursorclass=pymysql.cursors.DictCursor
+    return psycopg2.connect(
+        host="db.mwjaxtmrqscfeiflzydv.supabase.co",
+        user="postgres",
+        password="P@ssw0rd", 
+        database="postgres",
+        port=5432
     )
+
+@app.route("/test_db")
+def test_db():
+    try:
+        conn = get_db_connection()
+        conn.close()
+        return jsonify({"status": "success", "message": "PostgreSQL connected ✅"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 # Endpoint: Register
 @app.route('/register', methods=['POST'])
@@ -784,11 +793,6 @@ def predict_disease():
 
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
-
-# test
-@app.route('/', methods=['GET'])
-def index():
-    return '✅ NusaMiner Flask backend is live!'
 
 
 # Endpoint Clustering
